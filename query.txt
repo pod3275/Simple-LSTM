@@ -1,0 +1,62 @@
+create table t1 as 
+	select distinct user_id from use_log // 사용자 이름 저장 테이블 만들기
+
+
+
+create table count_for_user_id as
+	select user_id, count(*) as 'count' from use_log group by user_id
+
+create table count_for_menu_name as
+	select menu_name, count(*) as 'count' from use_log group by menu_name
+
+
+
+create table user_id_min_max_avg as
+select min(count) as min, max(count) as max, avg(count) as avg from count_for_user_id
+
+create table menu_name_min_max_avg as
+select min(count) as min, max(count) as max, avg(count) as avg from count_for_menu_name
+
+
+
+create table count_for_user_id_no_duplicate as
+	select user_id, count(*) as 'count' from use_log_no_duplicate group by user_id
+
+create table count_for_menu_name_no_duplicate as
+	select menu_name, count(*) as 'count' from use_log_no_duplicate group by menu_name
+
+
+
+create table data_count_user_id as
+	select count_for_user_id.user_id as 'user_id', count_for_user_id.count as 'dup_O', count_for_user_id_no_duplicate.count as 'dup_X'
+	from count_for_user_id, count_for_user_id_no_duplicate
+	where count_for_user_id.user_id = count_for_user_id_no_duplicate.user_id
+
+create table data_count_menu_name as
+	select count_for_menu_name.menu_name as 'menu_name', count_for_menu_name.count as 'dup_O', count_for_menu_name_no_duplicate.count as 'dup_X'
+	from count_for_menu_name, count_for_menu_name_no_duplicate
+	where count_for_menu_name.menu_name = count_for_menu_name_no_duplicate.menu_name
+
+
+
+create table two_gram_menu_count as
+	select a, b, count(*) as 'count'
+	from two_gram_menu_list
+	group by a, b
+
+
+create table three_gram_menu_count as
+	select ab, c, count(*) as 'count'
+	from three_gram_menu_list
+	group by ab, c
+
+
+
+create table two_gram_result as
+	select two_gram_top_50.a, two_gram_menu_count_2.b, two_gram_menu_count_2.count as 'count', two_gram_top_50.countsum as 'total'
+	from two_gram_top_50, two_gram_menu_count_2
+	where two_gram_top_50.a = two_gram_menu_count_2.a
+
+
+create table user_more_than_40 as
+	select user_id,dup_X from data_count_user_id where data_count_user_id.dup_X>40
