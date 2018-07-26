@@ -83,34 +83,47 @@ X = tf.placeholder(tf.float32, [None, n_step, n_input])
 Y = tf.placeholder(tf.int32, [None])
 dropout_rate = tf.placeholder(tf.float32)
 
-W = tf.Variable(tf.random_normal([n_hidden, n_class]))
-b = tf.Variable(tf.random_normal([n_class]))
+with tf.name_scope('cell1'):
+    W = tf.Variable(tf.random_normal([n_hidden, n_class]), name='W1')
+    b = tf.Variable(tf.random_normal([n_class]))
+    
 global_step = tf.Variable(0, trainable=False)
 
-cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=n_hidden)
-cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=dropout_rate)
+cell1 = tf.nn.rnn_cell.BasicLSTMCell(num_units=n_hidden)
+cell2 = tf.nn.rnn_cell.BasicLSTMCell(num_units=n_hidden)
+cell3 = tf.nn.rnn_cell.BasicLSTMCell(num_units=n_hidden)
 
-outputs, states = tf.nn.dynamic_rnn(cell, X, dtype=tf.float32)
+multi_cell = tf.nn.rnn_cell.MultiRNNCell([cell1, cell2, cell3])
+multi_cell = tf.nn.rnn_cell.DropoutWrapper(multi_cell, output_keep_prob=dropout_rate)
+
+outputs, states = tf.nn.dynamic_rnn(multi_cell, X, dtype=tf.float32)
 
 outputs = tf.transpose(outputs, [1,0,2])
 outputs = outputs[-1]
 model = tf.matmul(outputs, W) + b
 
-prediction = tf.cast(tf.argmax(model, 1), tf.int32)
-prediction_check = tf.equal(prediction, Y)
-accuracy = tf.reduce_mean(tf.cast(prediction_check, tf.float32))
-
-cost = tf.reduce_mean(
-        tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=model, labels=Y))
-
-learning_rate = tf.train.exponential_decay(start_learning_rate, global_step, 100000, 0.96, staircase=True)
-optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
+with tf.name_scope('optimizer'):
+    cost = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    logits=model, labels=Y))
+    
+    prediction = tf.cast(tf.argmax(model, 1), tf.int32)
+    prediction_check = tf.equal(prediction, Y)
+    accuracy = tf.reduce_mean(tf.cast(prediction_check, tf.float32))
+    
+    learning_rate = tf.train.exponential_decay(start_learning_rate, global_step, 100000, 0.96, staircase=True)
+    optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
+    tf.summary.scalar('cost', cost)
+    tf.summary.scalar('accuracy', accuracy)
+    
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 total_batch = int(np.ceil(len(train_data) / batch_size))
+
+merged = tf.summary.merge_all()
+writer = tf.summary.FileWriter('./logs', sess.graph)
 
 for epoch in range(total_epoch):
     
@@ -124,7 +137,10 @@ for epoch in range(total_epoch):
                 
         if ((epoch*total_batch+batch_index+1)%100 == 0):
             print('Iteration:', '%04d' % (epoch*total_batch+batch_index + 1),
-                  'Cost =', '{:.6f}'.format(acc))
+                  'Accuracy =', '{:.6f}'.format(acc))
+            
+        summary = sess.run(merged, feed_dict={X: X_batch, Y: y_batch, dropout_rate: 1.0})
+        writer.add_summary(summary, global_step = sess.run(global_step))
 
 print('End.')
 
@@ -133,7 +149,7 @@ predict, accuracy_val = sess.run([prediction, accuracy],
                                  feed_dict={X: test_input, Y: test_output, dropout_rate: 1.0})
 
 print('\n=== 예측 결과 ===')
-print('정확도:',accuracy_val)
+print('정확도:',accuracy_val*100)
 
         
         
